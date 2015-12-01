@@ -276,7 +276,8 @@ void computeMRF(){
 	// read solution
 	for (int i = 0; i < nPoints;i++)
 		label[i] = mrf->GetSolution(nodes[i]);
-
+	delete mrf;
+	delete nodes;
 	printf("Finish!");	
 }
 void outputResult(){
@@ -300,6 +301,9 @@ void outputOrigin(){
 	}
 	export_pointcloud_ply("cube-origin.ply", xPoints, nPoints, NULL, pResult);
 }
+void freeResource(){
+	delete pointKDtree;
+}
 codex::utils::timer time_counter;
 int main(){
 	time_counter.update();
@@ -311,6 +315,7 @@ int main(){
 	outputResult();
 	time_counter.update();
 	printf("\nTime: %lf\n", time_counter.elapsed_time());
+	freeResource();
 	system("pause");
 	return 0;
 }
