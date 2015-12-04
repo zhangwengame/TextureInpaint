@@ -15,7 +15,7 @@
 //-------------Parameters
 const int M = 3;
 const int R = 1000;
-const int nPointsMax = 7000;
+const int nPointsMax = 70000;
 const int nIteration = 1 << M;
 const int kapa = 5;
 const double miuX = 0.1;
@@ -28,12 +28,12 @@ typedef nanoflann::KDTreeSingleIndexAdaptor <
 	PointCloud<double>,
 	3
 > KDTree;
-KDTree   *pointKDtree;
+KDTree   *pointKDtree,*lcKDtree=NULL;
 //-----------------------
 int pCandidates[nIteration][nPointsMax];
 int deltaCandidates[nIteration][nPointsMax];
 Eigen::Vector3d xPoints[nPointsMax];
-PointCloud<double> xPointsCloud;
+PointCloud<double> xPointsCloud,lcPointsCloud;
 Eigen::Vector3d pTexture[nPointsMax],pResult[nPointsMax];
 Eigen::Vector3d nResult[nPointsMax];
 std::set<int> lc, ll, lm,lr,lv;
@@ -65,7 +65,7 @@ void generateKDTree(){
 	pointKDtree->buildIndex();	
 }
 void generateCube(){
-	nPoints = 6000;
+	nPoints = 60000;
 	for (int i = 0; i < nPoints; i++)
 	{
 		int faceIndex = i / (nPoints/6);
@@ -108,6 +108,19 @@ void generateCube(){
 			pTexture[i] << 1.0, 1.0, 1.0;
 	}
 }
+void generatelcKDTree(){
+	lcPointsCloud.pts.resize(lc.size());
+	int len = lc.size();
+	for (size_t i = 0; i < len; i++)
+	{
+		lcPointsCloud.pts[i].x = xPoints[tlc[i]](0);
+		lcPointsCloud.pts[i].y = xPoints[tlc[i]](1);
+		lcPointsCloud.pts[i].z = xPoints[tlc[i]](2);
+	}
+	if (lcKDtree) delete lcKDtree;
+	lcKDtree = new KDTree(3, lcPointsCloud, nanoflann::KDTreeSingleIndexAdaptorParams(20));
+	lcKDtree->buildIndex();
+}
 double disTmp[nPointsMax];
 void computeSymmetry(){
 	int nM = 0;
@@ -123,11 +136,17 @@ void computeSymmetry(){
 		int inxlc = 0;
 		for (std::set<int>::iterator it = lc.begin(); it != lc.end(); it++, inxlc++)
 			tlc[inxlc] = *it;
+		generatelcKDTree();
 		nM = 0;
 		dM = 0.0;
 		normalM << 0, 0, 0;
 		lm.clear();
 		int lastPro = 0;
+		const size_t numResults = 1;
+		size_t retIndex[numResults];
+		double outDistSqr[numResults];
+		nanoflann::KNNResultSet<double> resultSet(numResults);
+		
 		for (int r = 0; r < R; r++){
 			lr.clear();
 			int sr = rand()*rand() % nPoints;
@@ -137,8 +156,20 @@ void computeSymmetry(){
 			dR = 0.50*(normalR.transpose()*(xPoints[sr] + xPoints[tll[tr]]))(0);
 			ImNormalR2 = Eigen::Matrix3d::Identity()-2.0*normalR*normalR.transpose();
 			dnormalRd = 2.0*normalR*dR;
+			
+			
 			for (int s = 0; s < inxll; s++){
-				int flag = -1;
+				resultSet.init(&retIndex[0], &outDistSqr[0]);
+				Eigen::Vector3d oppoPoint = (ImNormalR2*xPoints[tll[s]] + dnormalRd);
+				double queryPt[3] = { oppoPoint(0), oppoPoint(1), oppoPoint(2) };
+				lcKDtree->findNeighbors(resultSet, &queryPt[0], nanoflann::SearchParams(10));
+				int oppoIndex = tlc[retIndex[0]];
+				assert(oppoIndex >= 0 && oppoIndex<nPoints);
+				double xVal = (oppoPoint - xPoints[oppoIndex]).norm();
+				double pVal = (pTexture[tll[s]] - pTexture[oppoIndex]).norm();
+				if (xVal < miuX && pVal < niuP)
+					lr.insert(tll[s]);
+				/*	int flag = -1;
 #pragma omp parallel for
 				for (int t = 0; t < inxlc; t++){
 					if (-1 == flag)
@@ -153,7 +184,10 @@ void computeSymmetry(){
 					}
 				}
 				if (0 == flag)
-					lr.insert(tll[s]);
+					lr.insert(tll[s]);*/
+
+
+
 			}
 			if (lr.size() > nM){
 				nM = lr.size();
@@ -176,7 +210,7 @@ void computeSymmetry(){
 		lastPro = 0;
 		for (int s = 0; s < nPoints; s++)
 		{
-			int tInx = -1;
+		/*	int tInx = -1;
 			double xMin = -1;
 #pragma omp parallel for
 			for (int t = 0; t < inxlc; t++){
@@ -189,14 +223,20 @@ void computeSymmetry(){
 					xMin = disTmp[t];
 					tInx = t;
 				}
-			}
-			double pVal = (pTexture[s] - pTexture[tlc[tInx]]).norm();
-			double xVal = (xPoints[s] - (ImNormalM2*xPoints[tlc[tInx]] + dnormalMd)).norm();
-			assert(tInx >= 0);
+			}*/
+			resultSet.init(&retIndex[0], &outDistSqr[0]);
+			Eigen::Vector3d oppoPoint = (ImNormalM2*xPoints[s] + dnormalMd);
+			double queryPt[3] = { oppoPoint(0), oppoPoint(1), oppoPoint(2) };
+			lcKDtree->findNeighbors(resultSet, &queryPt[0], nanoflann::SearchParams(10));
+			int oppoIndex = tlc[retIndex[0]];
+
+			double pVal = (pTexture[s] - pTexture[oppoIndex]).norm();
+			double xVal = (oppoPoint - xPoints[oppoIndex]).norm();
+			assert(oppoIndex >= 0&&oppoIndex<nPoints);
 			if (xVal < miuX && pVal < niuP)
 			{
 				for (int i = 0; i < iLim; i++){
-					pCandidates[i + iLim][s] = pCandidates[i][tlc[tInx]];
+					pCandidates[i + iLim][s] = pCandidates[i][oppoIndex];
 				}
 			}
 			if (int(s*100.0 / nPoints) > lastPro)
