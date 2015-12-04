@@ -15,7 +15,7 @@
 //-------------Parameters
 const int M = 3;
 const int R = 1000;
-const int nPointsMax = 70000;
+const int nPointsMax = 700000;
 const int nIteration = 1 << M;
 const int kapa = 5;
 const double miuX = 0.1;
@@ -36,10 +36,12 @@ Eigen::Vector3d xPoints[nPointsMax];
 PointCloud<double> xPointsCloud,lcPointsCloud;
 Eigen::Vector3d pTexture[nPointsMax],pResult[nPointsMax];
 Eigen::Vector3d nResult[nPointsMax];
-std::set<int> lc, ll, lm,lr,lv;
+std::set<int> lc, ll, lm, lv;
 //------------------------
 int tlc[nPointsMax], tll[nPointsMax], tlm[nPointsMax];
 int nPoints = 0;
+//------------------------
+codex::utils::timer time_counter;
 //------------------------
 void export_pointcloud_ply(const char *filename, Eigen::Vector3d *pos, int n,
 	const Eigen::Vector3d *p_normal,
@@ -65,7 +67,7 @@ void generateKDTree(){
 	pointKDtree->buildIndex();	
 }
 void generateCube(){
-	nPoints = 60000;
+	nPoints = 600000;
 	for (int i = 0; i < nPoints; i++)
 	{
 		int faceIndex = i / (nPoints/6);
@@ -118,12 +120,13 @@ void generatelcKDTree(){
 		lcPointsCloud.pts[i].z = xPoints[tlc[i]](2);
 	}
 	if (lcKDtree) delete lcKDtree;
-	lcKDtree = new KDTree(3, lcPointsCloud, nanoflann::KDTreeSingleIndexAdaptorParams(20));
+	lcKDtree = new KDTree(3, lcPointsCloud, nanoflann::KDTreeSingleIndexAdaptorParams(30));
 	lcKDtree->buildIndex();
 }
 double disTmp[nPointsMax];
 void computeSymmetry(){
 	int nM = 0;
+	int lrCount;
 	double dM = 0, dR;
 	Eigen::Vector3d normalM;
 	Eigen::Vector3d normalR, dnormalRd, dnormalMd,tmp;
@@ -148,7 +151,7 @@ void computeSymmetry(){
 		nanoflann::KNNResultSet<double> resultSet(numResults);
 		
 		for (int r = 0; r < R; r++){
-			lr.clear();
+			lrCount = 0;
 			int sr = rand()*rand() % nPoints;
 			int tr = rand()*rand() % ll.size();
 			tmp = xPoints[sr] - xPoints[tll[tr]];
@@ -157,8 +160,9 @@ void computeSymmetry(){
 			ImNormalR2 = Eigen::Matrix3d::Identity()-2.0*normalR*normalR.transpose();
 			dnormalRd = 2.0*normalR*dR;
 			
-			
+			//time_counter.update();
 			for (int s = 0; s < inxll; s++){
+				
 				resultSet.init(&retIndex[0], &outDistSqr[0]);
 				Eigen::Vector3d oppoPoint = (ImNormalR2*xPoints[tll[s]] + dnormalRd);
 				double queryPt[3] = { oppoPoint(0), oppoPoint(1), oppoPoint(2) };
@@ -168,7 +172,8 @@ void computeSymmetry(){
 				double xVal = (oppoPoint - xPoints[oppoIndex]).norm();
 				double pVal = (pTexture[tll[s]] - pTexture[oppoIndex]).norm();
 				if (xVal < miuX && pVal < niuP)
-					lr.insert(tll[s]);
+					lrCount++;
+			
 				/*	int flag = -1;
 #pragma omp parallel for
 				for (int t = 0; t < inxlc; t++){
@@ -189,9 +194,8 @@ void computeSymmetry(){
 
 
 			}
-			if (lr.size() > nM){
-				nM = lr.size();
-				lm = lr;
+			if (lrCount > nM){
+				nM = lrCount;
 				normalM = normalR;
 				dM = dR;
 			}
@@ -200,14 +204,34 @@ void computeSymmetry(){
 				lastPro = int(r*100.0 / R);
 				printf("Ransack %d %%\n", lastPro);
 			}
+			/*time_counter.update();
+			printf("\nTime: %lf\n", time_counter.elapsed_time());
+			system("pause");*/
 		}
-		int iLim = 1 << (m); 
+		int iLim = 1 << (m);
 		ImNormalM2 = Eigen::Matrix3d::Identity() - 2.0*normalM*normalM.transpose();
 		dnormalMd = 2.0*normalM*dM;
-		std::cout << normalM<<"\n";
-		std::cout << dM<< "\n";
+		std::cout << normalM << "\n";
+		std::cout << dM << "\n";
 		std::cout << nM << "\n";
 		lastPro = 0;
+		lm.clear();
+		for (int s = 0; s < inxll; s++){
+			resultSet.init(&retIndex[0], &outDistSqr[0]);
+			Eigen::Vector3d oppoPoint = (ImNormalM2*xPoints[tll[s]] + dnormalMd);
+			double queryPt[3] = { oppoPoint(0), oppoPoint(1), oppoPoint(2) };
+			lcKDtree->findNeighbors(resultSet, &queryPt[0], nanoflann::SearchParams(10));
+			int oppoIndex = tlc[retIndex[0]];
+			assert(oppoIndex >= 0 && oppoIndex<nPoints);
+			double xVal = (oppoPoint - xPoints[oppoIndex]).norm();
+			double pVal = (pTexture[tll[s]] - pTexture[oppoIndex]).norm();
+			if (xVal < miuX && pVal < niuP)
+				lm.insert(tll[s]);
+		}
+
+
+
+
 		for (int s = 0; s < nPoints; s++)
 		{
 		/*	int tInx = -1;
@@ -266,6 +290,7 @@ public:
 };
 std::hash_set<std::pair<int, int>, pair_comparator > relation;
 int label[nPointsMax];
+void outputResult();
 void computeMRF(){
 	MRFEnergy<TypeGeneral>* mrf;
 	MRFEnergy<TypeGeneral>::NodeId* nodes;
@@ -302,21 +327,25 @@ void computeMRF(){
 		nanoflann::KNNResultSet<double> resultSet(numResults);
 		resultSet.init(&retIndex[0], &outDistSqr[0]);
 		pointKDtree->findNeighbors(resultSet, &queryPt[0], nanoflann::SearchParams(10));
-		for (int no = 1;  no< numResults; no++){
+		int passJS = 0;
+		for (int no = 0;  no< numResults; no++){
 			int j = retIndex[no];
+			if (i == j || passJS>=kapa) continue;
 			for (int ki = 0; ki < nIteration; ki++)
 				for (int kj = 0; kj < nIteration; kj++){
-					edgeEnergy[i][no-1][ki*nIteration+kj] = 10000;
+					edgeEnergy[i][passJS][ki*nIteration+kj] = 10000;
 					if (pCandidates[ki][i] != -1 && pCandidates[kj][j] != -1){
 						double tmp = (pTexture[pCandidates[ki][i]] - pTexture[pCandidates[kj][j]]).norm();
 						tmp *= tmp;
 						if (ki == kj)
 							tmp *= beta;
-						edgeEnergy[i][no-1][ki*nIteration + kj] = tmp;
+						edgeEnergy[i][passJS][ki*nIteration + kj] = tmp;
 
 					}
 				}
-			mrf->AddEdge(nodes[i], nodes[j], TypeGeneral::EdgeData(TypeGeneral::GENERAL, edgeEnergy[i][no - 1]));
+			assert(i != j);
+			passJS++;
+			mrf->AddEdge(nodes[i], nodes[j], TypeGeneral::EdgeData(TypeGeneral::GENERAL, edgeEnergy[i][passJS]));
 			relation.insert(std::make_pair(i, j));
 			relation.insert(std::make_pair(j, i));
 		}
@@ -329,8 +358,12 @@ void computeMRF(){
 	// read solution
 	for (int i = 0; i < nPoints;i++)
 		label[i] = mrf->GetSolution(nodes[i]);
-	delete mrf;
+	outputResult();
+	time_counter.update();
+	printf("\nTime: %lf\n", time_counter.elapsed_time());
+	printf("Releasing!");
 	delete nodes;
+	delete mrf;
 	printf("Finish!");	
 }
 void outputResult(){
@@ -356,8 +389,9 @@ void outputOrigin(){
 }
 void freeResource(){
 	delete pointKDtree;
+	delete lcKDtree;
 }
-codex::utils::timer time_counter;
+
 int main(){
 	time_counter.update();
 	generateCube();
@@ -365,9 +399,7 @@ int main(){
 	generateKDTree();
 	computeSymmetry();
 	computeMRF();
-	outputResult();
-	time_counter.update();
-	printf("\nTime: %lf\n", time_counter.elapsed_time());
+	//outputResult();
 	freeResource();
 	system("pause");
 	return 0;
