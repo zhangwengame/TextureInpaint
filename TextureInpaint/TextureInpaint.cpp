@@ -15,7 +15,7 @@
 //-------------Parameters
 const int M = 3;
 const int R = 1000;
-const int nPointsMax = 70000;
+const int nPointsMax = 7000;
 const int nIteration = 1 << M;
 const int kapa = 5;
 const double miuX = 0.1;
@@ -65,7 +65,7 @@ void generateKDTree(){
 	pointKDtree->buildIndex();	
 }
 void generateCube(){
-	nPoints = 60000;
+	nPoints = 6000;
 	for (int i = 0; i < nPoints; i++)
 	{
 		int faceIndex = i / (nPoints/6);
