@@ -15,7 +15,7 @@
 //-------------Parameters
 const int M = 3;
 const int R = 1000;
-const int nPointsMax = 10000;
+const int nPointsMax = 70000;
 const int nIteration = 1 << M;
 const int kapa = 5;
 const double miuX = 0.1;
@@ -65,7 +65,7 @@ void generateKDTree(){
 	pointKDtree->buildIndex();	
 }
 void generateCube(){
-	nPoints = 6000;
+	nPoints = 60000;
 	for (int i = 0; i < nPoints; i++)
 	{
 		int faceIndex = i / (nPoints/6);
@@ -116,6 +116,7 @@ void computeSymmetry(){
 	Eigen::Vector3d normalR, dnormalRd, dnormalMd,tmp;
 	Eigen::Matrix3d ImNormalR2, ImNormalM2;
 	for (int m = 0; m < M; m++){
+		printf("Layer Transfer %d iteration\n", m+1);
 		int inxll = 0;
 		for (std::set<int>::iterator it = ll.begin(); it != ll.end(); it++, inxll++)
 			tll[inxll] = *it;
@@ -126,6 +127,7 @@ void computeSymmetry(){
 		dM = 0.0;
 		normalM << 0, 0, 0;
 		lm.clear();
+		int lastPro = 0;
 		for (int r = 0; r < R; r++){
 			lr.clear();
 			int sr = rand()*rand() % nPoints;
@@ -159,6 +161,11 @@ void computeSymmetry(){
 				normalM = normalR;
 				dM = dR;
 			}
+			if (int(r*100.0 / R) > lastPro)
+			{
+				lastPro = int(r*100.0 / R);
+				printf("Ransack %d %%\n", lastPro);
+			}
 		}
 		int iLim = 1 << (m); 
 		ImNormalM2 = Eigen::Matrix3d::Identity() - 2.0*normalM*normalM.transpose();
@@ -166,6 +173,7 @@ void computeSymmetry(){
 		std::cout << normalM<<"\n";
 		std::cout << dM<< "\n";
 		std::cout << nM << "\n";
+		lastPro = 0;
 		for (int s = 0; s < nPoints; s++)
 		{
 			int tInx = -1;
@@ -190,6 +198,11 @@ void computeSymmetry(){
 				for (int i = 0; i < iLim; i++){
 					pCandidates[i + iLim][s] = pCandidates[i][tlc[tInx]];
 				}
+			}
+			if (int(s*100.0 / nPoints) > lastPro)
+			{
+				lastPro = int(s*100.0 / nPoints);
+				printf("Final Pass %d %%\n", lastPro);
 			}
 		}
 		for (std::set<int>::iterator it = lm.begin(); it != lm.end(); it++)
