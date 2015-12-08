@@ -110,6 +110,13 @@ void generateCube(){
 			pTexture[i] << 1.0, 1.0, 1.0;
 	}
 }
+void readPly(){
+	FILE *f = fopen("pts_pure.ply");
+	fscanf(f, "%d", &nPoints);
+	for (int i = 0; i < nPoints; i++){
+
+	}
+}
 void generatelcKDTree(){
 	lcPointsCloud.pts.resize(lc.size());
 	int len = lc.size();
@@ -394,7 +401,7 @@ void freeResource(){
 
 int main(){
 	time_counter.update();
-	generateCube();
+	//generateCube();
 	outputOrigin();
 	generateKDTree();
 	computeSymmetry();
