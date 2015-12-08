@@ -111,10 +111,10 @@ void generateCube(){
 	}
 }
 void readPly(){
-	FILE *f = fopen("pts_pure.ply");
+	FILE *f = fopen("pts_pure.ply","w");
 	fscanf(f, "%d", &nPoints);
 	for (int i = 0; i < nPoints; i++){
-
+		
 	}
 }
 void generatelcKDTree(){
