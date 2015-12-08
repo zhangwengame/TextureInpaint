@@ -18,6 +18,7 @@ const int R = 1000;
 const int nPointsMax = 700000;
 const int nIteration = 1 << M;
 const int kapa = 5;
+const int nColorDim=7;
 const double miuX = 0.05;
 const double niuP = 30;
 const double zeta = 0.5;
@@ -34,7 +35,7 @@ int pCandidates[nIteration][nPointsMax];
 int deltaCandidates[nIteration][nPointsMax];
 Eigen::Vector3d xPoints[nPointsMax];
 PointCloud<double> xPointsCloud,lcPointsCloud;
-Eigen::Vector3d pTexture[nPointsMax],pResult[nPointsMax];
+Eigen::Matrix<double, nColorDim, 1>  pTexture[nPointsMax], pResult[nPointsMax];
 Eigen::Vector3d nResult[nPointsMax];
 std::set<int> lc, ll, lm, lv;
 //------------------------
@@ -111,11 +112,42 @@ void generateCube(){
 	}
 }
 void readPly(){
-	FILE *f = fopen("pts_pure.ply","w");
-	fscanf(f, "%d", &nPoints);
+	FILE *f;
+	fopen_s(&f,"pts_pure.ply", "r");
+	fscanf_s(f, "%d", &nPoints);
 	for (int i = 0; i < nPoints; i++){
-		
+		double x, y, z;
+		fscanf_s(f, "%lf %lf %lf", &x, &y, &z);
+		xPoints[i] << x, y, z;
 	}
+	fclose(f);
+	int pN;
+	fopen_s(&f,"attr.txt", "r");
+	fscanf_s(f, "%d", &pN);
+	assert(pN == nPoints);
+	lc.clear();
+	ll.clear();
+	initializeCandidates();
+	double tmpTexture[nColorDim];
+	for (int i = 0; i < nPoints; i++){
+		for (int j = 0; j < nColorDim; j++){
+			fscanf_s(f, "%lf", &tmpTexture[j]);
+			pTexture[i](j) = tmpTexture[j];
+		}
+		if (tmpTexture[0] < 0)
+		{
+			ll.insert(i);
+		}
+		else
+		{
+			lc.insert(i);
+			pCandidates[0][i] = i;
+		}
+	}
+	fclose(f);
+	lv = lc;
+	std::cout << "8\n" << pTexture[8] << "\n" << "11\n" << pTexture[11] << "\n";
+	system("pause");
 }
 void generatelcKDTree(){
 	lcPointsCloud.pts.resize(lc.size());
@@ -297,7 +329,7 @@ public:
 };
 std::hash_set<std::pair<int, int>, pair_comparator > relation;
 int label[nPointsMax];
-void outputResult();
+//void outputResult();
 void computeMRF(){
 	MRFEnergy<TypeGeneral>* mrf;
 	MRFEnergy<TypeGeneral>::NodeId* nodes;
@@ -365,7 +397,7 @@ void computeMRF(){
 	// read solution
 	for (int i = 0; i < nPoints;i++)
 		label[i] = mrf->GetSolution(nodes[i]);
-	outputResult();
+	//outputResult();
 	time_counter.update();
 	printf("\nTime: %lf\n", time_counter.elapsed_time());
 	printf("Releasing!");
@@ -373,6 +405,7 @@ void computeMRF(){
 	delete mrf;
 	printf("Finish!");	
 }
+/*
 void outputResult(){
 	for (int i = 0; i < nPoints; i++){
 		int tmp = pCandidates[label[i]][i];
@@ -393,7 +426,7 @@ void outputOrigin(){
 			pResult[i] << 0, 0, 0;
 	}
 	export_pointcloud_ply("cube-origin.ply", xPoints, nPoints, NULL, pResult);
-}
+}*/
 void freeResource(){
 	delete pointKDtree;
 	delete lcKDtree;
@@ -402,7 +435,8 @@ void freeResource(){
 int main(){
 	time_counter.update();
 	//generateCube();
-	outputOrigin();
+	//outputOrigin();
+	readPly();
 	generateKDTree();
 	computeSymmetry();
 	computeMRF();
