@@ -15,10 +15,10 @@
 //-------------Parameters
 const int M = 3;
 const int R = 1000;
-const int nPointsMax = 600000;
+const int nPointsMax = 70000;
 const int nIteration = 1 << M;
 const int kapa = 5;
-const int nColorDim=3;
+const int nColorDim=7;
 const double miuX = 0.05;
 const double niuP = 30;
 const double zeta = 0.5;
@@ -334,6 +334,7 @@ public:
 std::hash_set<std::pair<int, int>, pair_comparator > relation;
 int label[nPointsMax];
 void outputResult();
+void outputAttr();
 void computeMRF(){
 	MRFEnergy<TypeGeneral>* mrf;
 	MRFEnergy<TypeGeneral>::NodeId* nodes;
@@ -402,7 +403,8 @@ void computeMRF(){
 	// read solution
 	for (int i = 0; i < nPoints;i++)
 		label[i] = mrf->GetSolution(nodes[i]);
-	outputResult();
+	//outputResult();
+	outputAttr();
 	time_counter.update();
 	printf("\nTime: %lf\n", time_counter.elapsed_time());
 	printf("Releasing!");
@@ -418,17 +420,26 @@ void outputResult(){
 		else
 			pResult[i] << -1, -1, -1;
 	}
-	/*FILE *f;
+	export_pointcloud_ply("cube-result.ply", xPoints, nPoints, NULL, pResult);
+}
+void outputAttr(){
+	for (int i = 0; i < nPoints; i++){
+		int tmp = pCandidates[label[i]][i];
+		if (-1 != tmp)
+			pResult[i] = pTexture[tmp];
+		else
+			pResult[i] << -1, -1, -1;
+	}
+	FILE *f;
 	fopen_s(&f, "result/attr_r.txt", "w");
 	fprintf_s(f, "%d\n", nPoints);
 	for (int i = 0; i < nPoints; i++)
 	{
-		for (int j = 0; j < nColorDim; j++)
-			fprintf_s(f,"%lf ", pResult[i](j));
-		fprintf_s(f,"\n");
+	for (int j = 0; j < nColorDim; j++)
+	fprintf_s(f,"%lf ", pResult[i](j));
+	fprintf_s(f,"\n");
 	}
-	fclose(f);*/
-	export_pointcloud_ply("cube-result.ply", xPoints, nPoints, NULL, pResult);
+	fclose(f);
 }
 void outputOrigin(){
 	memset(label, 0, sizeof(label));
@@ -448,9 +459,9 @@ void freeResource(){
 
 int main(){
 	time_counter.update();
-//	readPly();
-	generateCube();
-	outputOrigin();
+	readPly();
+	//generateCube();
+	//outputOrigin();
 	generateKDTree();
 	computeSymmetry();
 	computeMRF();
