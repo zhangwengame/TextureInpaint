@@ -35,7 +35,9 @@ int pCandidates[nIteration][nPointsMax];
 int deltaCandidates[nIteration][nPointsMax];
 Eigen::Vector3d xPoints[nPointsMax];
 PointCloud<double> xPointsCloud,lcPointsCloud;
+
 Eigen::Matrix<double,nColorDim,1> pTexture[nPointsMax],pResult[nPointsMax];
+
 Eigen::Vector3d nResult[nPointsMax];
 std::set<int> lc, ll, lm, lv;
 //------------------------
@@ -113,7 +115,9 @@ void generateCube(){
 }
 void readPly(){
 	FILE *f;
+
 	fopen_s(&f, "pts_pure.ply", "r");
+
 	fscanf_s(f, "%d", &nPoints);
 	for (int i = 0; i < nPoints; i++){
 		double x, y, z;
@@ -122,6 +126,7 @@ void readPly(){
 	}
 	fclose(f);
 	int pN;
+
 	fopen_s(&f, "attr.txt", "r");
 	fscanf_s(f, "%d", &pN);
 	assert(pN == nPoints);
@@ -146,8 +151,10 @@ void readPly(){
 	}
 	fclose(f);
 	lv = lc;
+
 	//std::cout << "8\n" << pTexture[8] << "\n" << "11\n" << pTexture[11] << "\n";
 	//system("pause");
+
 }
 void generatelcKDTree(){
 	lcPointsCloud.pts.resize(lc.size());
@@ -333,8 +340,10 @@ public:
 };
 std::hash_set<std::pair<int, int>, pair_comparator > relation;
 int label[nPointsMax];
+
 void outputResult();
 void outputAttr();
+
 void computeMRF(){
 	MRFEnergy<TypeGeneral>* mrf;
 	MRFEnergy<TypeGeneral>::NodeId* nodes;
@@ -404,23 +413,15 @@ void computeMRF(){
 	for (int i = 0; i < nPoints;i++)
 		label[i] = mrf->GetSolution(nodes[i]);
 	//outputResult();
+
 	outputAttr();
+
 	time_counter.update();
 	printf("\nTime: %lf\n", time_counter.elapsed_time());
 	printf("Releasing!");
 	delete nodes;
 	delete mrf;
 	printf("Finish!");	
-}
-void outputResult(){
-	for (int i = 0; i < nPoints; i++){
-		int tmp = pCandidates[label[i]][i];
-		if (-1 != tmp)
-			pResult[i] = pTexture[tmp];
-		else
-			pResult[i] << -1, -1, -1;
-	}
-	export_pointcloud_ply("cube-result.ply", xPoints, nPoints, NULL, pResult);
 }
 void outputAttr(){
 	for (int i = 0; i < nPoints; i++){
@@ -435,12 +436,24 @@ void outputAttr(){
 	fprintf_s(f, "%d\n", nPoints);
 	for (int i = 0; i < nPoints; i++)
 	{
-	for (int j = 0; j < nColorDim; j++)
-	fprintf_s(f,"%lf ", pResult[i](j));
-	fprintf_s(f,"\n");
+		for (int j = 0; j < nColorDim; j++)
+			fprintf_s(f, "%lf ", pResult[i](j));
+		fprintf_s(f, "\n");
 	}
 	fclose(f);
 }
+
+void outputResult(){
+	for (int i = 0; i < nPoints; i++){
+		int tmp = pCandidates[label[i]][i];
+		if (-1 != tmp)
+			pResult[i] = pTexture[tmp];
+		else
+			pResult[i] << -1, -1, -1;
+	}
+	export_pointcloud_ply("cube-result.ply", xPoints, nPoints, NULL, pResult);
+}
+
 void outputOrigin(){
 	memset(label, 0, sizeof(label));
 	for (int i = 0; i < nPoints; i++){
@@ -459,9 +472,11 @@ void freeResource(){
 
 int main(){
 	time_counter.update();
+
 	readPly();
 	//generateCube();
 	//outputOrigin();
+
 	generateKDTree();
 	computeSymmetry();
 	computeMRF();
