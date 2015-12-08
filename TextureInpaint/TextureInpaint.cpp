@@ -15,10 +15,10 @@
 //-------------Parameters
 const int M = 3;
 const int R = 1000;
-const int nPointsMax = 70000;
+const int nPointsMax = 600000;
 const int nIteration = 1 << M;
 const int kapa = 5;
-const int nColorDim=7;
+const int nColorDim=3;
 const double miuX = 0.05;
 const double niuP = 30;
 const double zeta = 0.5;
@@ -46,7 +46,7 @@ codex::utils::timer time_counter;
 //------------------------
 void export_pointcloud_ply(const char *filename, Eigen::Vector3d *pos, int n,
 	const Eigen::Vector3d *p_normal,
-	const Eigen::Vector3d *p_color);
+	const Eigen::Matrix<double, nColorDim, 1> *p_color);
 
 void initializeCandidates(){
 	for (int i = 0; i < nIteration; i++)
@@ -316,8 +316,12 @@ void computeSymmetry(){
 		}
 	}
 }
-TypeGeneral::REAL unaryEnergy[nPointsMax][nIteration];
-TypeGeneral::REAL edgeEnergy[nPointsMax][kapa][nIteration*nIteration];
+class MRFData{
+public :
+	TypeGeneral::REAL unaryEnergy[nPointsMax][nIteration];
+	TypeGeneral::REAL edgeEnergy[nPointsMax][kapa][nIteration*nIteration];
+};
+MRFData *mData;
 class pair_comparator : public stdext::hash_compare<std::pair<size_t, size_t> >{
 	typedef std::pair<size_t, size_t> Key;
 public:
@@ -339,24 +343,25 @@ void computeMRF(){
 	const int nodeNum = nPoints; // number of nodes
 
 	mrf = new MRFEnergy<TypeGeneral>(TypeGeneral::GlobalSize());
-	nodes = new MRFEnergy<TypeGeneral>::NodeId[nodeNum];
-	memset(unaryEnergy, 0, sizeof(unaryEnergy));
-	memset(edgeEnergy, 0, sizeof(edgeEnergy));
+	nodes = new MRFEnergy<TypeGeneral>::NodeId[nodeNum]; 
+	mData=new MRFData();
+	memset(mData->unaryEnergy, 0, sizeof(mData->unaryEnergy));
+	memset(mData->edgeEnergy, 0, sizeof(mData->edgeEnergy));
 	for (int i = 0; i < nPoints; i++)
 		for (int j = 0; j < nIteration; j++)
 		{
 			if (-1 == pCandidates[j][i] )
-				unaryEnergy[i][j] = 10000;
+				mData->unaryEnergy[i][j] = 10000;
 			else
 			{
 				if (lv.count(i)>0 && 0 == j)
-					unaryEnergy[i][j] = zeta;
+					mData->unaryEnergy[i][j] = zeta;
 				else
-					unaryEnergy[i][j] = 1;
+					mData->unaryEnergy[i][j] = 1;
 			}				
 		}
 	for (int i = 0; i < nPoints; i++)
-		nodes[i] = mrf->AddNode(TypeGeneral::LocalSize(nIteration), TypeGeneral::NodeData(unaryEnergy[i]));
+		nodes[i] = mrf->AddNode(TypeGeneral::LocalSize(nIteration), TypeGeneral::NodeData(mData->unaryEnergy[i]));
 	// construct energy
 	const size_t numResults = kapa+1;
 	for (int i = 0; i < nPoints; i++){
@@ -372,19 +377,19 @@ void computeMRF(){
 			if (i == j || passJS>=kapa) continue;
 			for (int ki = 0; ki < nIteration; ki++)
 				for (int kj = 0; kj < nIteration; kj++){
-					edgeEnergy[i][passJS][ki*nIteration+kj] = 10000;
+					mData->edgeEnergy[i][passJS][ki*nIteration + kj] = 10000;
 					if (pCandidates[ki][i] != -1 && pCandidates[kj][j] != -1){
 						double tmp = (pTexture[pCandidates[ki][i]] - pTexture[pCandidates[kj][j]]).norm();
 						tmp *= tmp;
 						if (ki == kj)
 							tmp *= beta;
-						edgeEnergy[i][passJS][ki*nIteration + kj] = tmp;
+						mData->edgeEnergy[i][passJS][ki*nIteration + kj] = tmp;
 
 					}
 				}
 			assert(i != j);
 			passJS++;
-			mrf->AddEdge(nodes[i], nodes[j], TypeGeneral::EdgeData(TypeGeneral::GENERAL, edgeEnergy[i][passJS]));
+			mrf->AddEdge(nodes[i], nodes[j], TypeGeneral::EdgeData(TypeGeneral::GENERAL, mData->edgeEnergy[i][passJS]));
 			relation.insert(std::make_pair(i, j));
 			relation.insert(std::make_pair(j, i));
 		}
@@ -413,7 +418,7 @@ void outputResult(){
 		else
 			pResult[i] << -1, -1, -1;
 	}
-	FILE *f;
+	/*FILE *f;
 	fopen_s(&f, "result/attr_r.txt", "w");
 	fprintf_s(f, "%d\n", nPoints);
 	for (int i = 0; i < nPoints; i++)
@@ -422,8 +427,8 @@ void outputResult(){
 			fprintf_s(f,"%lf ", pResult[i](j));
 		fprintf_s(f,"\n");
 	}
-	fclose(f);
-	//export_pointcloud_ply("cube-result.ply", xPoints, nPoints, NULL, pResult);
+	fclose(f);*/
+	export_pointcloud_ply("cube-result.ply", xPoints, nPoints, NULL, pResult);
 }
 void outputOrigin(){
 	memset(label, 0, sizeof(label));
@@ -434,7 +439,7 @@ void outputOrigin(){
 		else
 			pResult[i] << 0, 0, 0;
 	}
-	//export_pointcloud_ply("cube-origin.ply", xPoints, nPoints, NULL, pResult);
+	export_pointcloud_ply("cube-origin.ply", xPoints, nPoints, NULL, pResult);
 }
 void freeResource(){
 	delete pointKDtree;
@@ -443,9 +448,9 @@ void freeResource(){
 
 int main(){
 	time_counter.update();
-	readPly();
-//	generateCube();
-//	outputOrigin();
+//	readPly();
+	generateCube();
+	outputOrigin();
 	generateKDTree();
 	computeSymmetry();
 	computeMRF();
@@ -456,7 +461,7 @@ int main(){
 }
 void export_pointcloud_ply(const char *filename, Eigen::Vector3d *pos, int n,
 	const Eigen::Vector3d *p_normal,
-	const Eigen::Vector3d *p_color)
+	const Eigen::Matrix<double, nColorDim, 1> *p_color)
 {
 	FILE *fp;
 
