@@ -419,6 +419,7 @@ void computeMRF(){
 	time_counter.update();
 	printf("\nTime: %lf\n", time_counter.elapsed_time());
 	printf("Releasing!");
+	delete mData;
 	delete nodes;
 	delete mrf;
 	printf("Finish!");	
